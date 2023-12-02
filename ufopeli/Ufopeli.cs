@@ -138,7 +138,7 @@ namespace ufopeli
 			//ship.IgnoresCollisionWith(shipAimLine);
 			ship.Mass = 2;
 			ship.Tag = "ship";
-			return ship;	
+			return ship;	//////
 		}
 
 		public PhysicsObject PlayerLine() // A line for the player to see where they are about to shoot (not used)
@@ -199,7 +199,6 @@ namespace ufopeli
 
 		public void EnemyCloseEvent()
 		{
-			
 		}
 
 		void PlayerCollision(PhysicsObject collider, PhysicsObject target)
