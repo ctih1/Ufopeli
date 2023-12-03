@@ -6,23 +6,40 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http.Json;
+using System.Xml;
+using System.Net.Http;
+using System.Net;
+using System.Net.Mime;
 
 namespace ufopeli
 {
 	public class Leaderboard
 	{
-		private Dictionary<String, Object> data = new Dictionary<String, Object>
+		HttpClient httpClient = new HttpClient();
+		HttpResponseMessage response;
+		HttpRequestMessage request;
+		public void StartServer()
 		{
-			{"score", 0},
-			{"time", null},
-			{"username", null},
-			{"version", 1}
-		};
+			
+			request = new HttpRequestMessage
+			{
+				Method = HttpMethod.Get,
+				RequestUri = new Uri("https://ufopeliserver.ctih.repl.co/"),
+			};
+			response = httpClient.Send(request);
 
-		private Boolean SaveData(Dictionary<String, Object> data)
+		}
+		public Boolean SaveData(String user, int score)
 		{
-			JsonConvert.SerializeObject(data);
-			return true;
+			// Settings TLS 1.2
+			System.Net.ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+			request = new HttpRequestMessage
+			{
+				Method = HttpMethod.Get,
+				RequestUri = new Uri(String.Format("https://ufopeliserver.ctih.repl.co/save?name={0}&score={1}",user,score)),
+			};
+			response = httpClient.Send(request);
+			return response.IsSuccessStatusCode;
 		} 
 
 	}
