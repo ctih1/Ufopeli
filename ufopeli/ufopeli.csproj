@@ -11,6 +11,9 @@
     </ItemGroup>
 
     <ItemGroup>
+      <None Update="Content\echo.wav">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
       <None Update="Content\enemy.png">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>

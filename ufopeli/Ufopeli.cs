@@ -2,6 +2,7 @@ using Jypeli;
 using Jypeli.Assets;
 using Jypeli.Effects;
 using Jypeli.Widgets;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -35,6 +36,7 @@ namespace ufopeli
 		// Score
 		int score = 0;
 		Label scoreText;
+		Layer textLayer;
 
 		// Health
 		int health = 100;
@@ -48,6 +50,8 @@ namespace ufopeli
 		// Sounds
 		SoundEffect normal = LoadSoundEffect("shoot.wav");        // Jostain syystä huono äänenlaatu
 		SoundEffect slowed = LoadSoundEffect("shoot_slowed.wav"); //				^^^^^^
+		SoundEffect echo = LoadSoundEffect("echo.wav");
+		Jypeli.Timer echoTimer;
 
 		// Objects
 		PhysicsObject ship;
@@ -89,8 +93,12 @@ namespace ufopeli
 
 		// Leaderboard
 		Leaderboard leaderboard = new Leaderboard();
-		
-		String username = "test"; // Ask user later
+
+		// Username
+		String username;
+		InputBox inputbox;
+		PushButton acceptButton;
+		Username userManager;
 		public override void Begin()
 		{
 			// Starting the server
@@ -103,6 +111,18 @@ namespace ufopeli
 			bulletSpeed = BASE_BULLET_SPEED;
 			rotationSpeed = BASE_ROTATION_SPEED;
 
+			// Username
+			userManager = new Username();
+			username = userManager.GetUsername();
+			if (username==null) 
+			{
+				inputbox = userManager.Input();
+				acceptButton = userManager.AcceptButton();
+				acceptButton.Clicked += ButtonClickEvent;
+				Add(inputbox);
+				Add(acceptButton);
+			}
+
 			// Sound
 			Game.MasterVolume = 0.5;
 
@@ -113,9 +133,9 @@ namespace ufopeli
 			// Score
 			scoreText = new Label("0");
 			scoreText.TextColor = Color.White;
-			scoreText.Layer = Layer.CreateStaticLayer();
+			scoreText.Layer = textLayer; 
 			score = 0;
-			Add(scoreText);
+			Add(scoreText,-3);
 
 			// Health
 			health = 100;
@@ -152,9 +172,9 @@ namespace ufopeli
 			plasmaCannon.AmmoIgnoresGravity = false;
 			plasmaCannon.Angle = plasmaCannon.Angle + Angle.FromDegrees(90);
 			plasmaCannon.FireRate = fireRate;
-			//plasmaCannon.AttackSound = normal;
 			ship.Add(plasmaCannon);
 
+			// Fixes an issue where the 'plasmaCannon' doesn't work.
 			ResetSlowdown();
 
 			// Keybinds
@@ -227,6 +247,12 @@ namespace ufopeli
 		{
 			
 		}
+		void ButtonClickEvent()
+		{
+			userManager.SaveUsername(inputbox.Text);
+			acceptButton.Destroy();
+			inputbox.Destroy();
+		}
 
 		void PlayerCollision(PhysicsObject collider, PhysicsObject target)
 		{
@@ -263,26 +289,22 @@ namespace ufopeli
 
 		void Boost()
 		{
-			MessageDisplay.Add("Boosting");
 			speed = BASE_SPEED*3;
 		}
 		void ResetBoost()
 		{
-			MessageDisplay.Add("!Boosting");
 
 			speed = BASE_SPEED;
 		}
 
 		void Slowdown()
 		{
-			MessageDisplay.Add("Slowdown");
 
 			speed = BASE_SPEED / 3;
 			enemySpeed = BASE_ENEMY_SPEED / 3;
 			bulletSpeed = BASE_BULLET_SPEED / 3;
 			rotationSpeed = BASE_ROTATION_SPEED / 3;
 			fireRate = BASE_FIRE_RATE / 3;
-			MessageDisplay.Add("" + enemies.Count);
 
 			if (approachLogic!=null)
 			{
@@ -302,13 +324,16 @@ namespace ufopeli
 
 		void ResetSlowdown()
 		{
-			MessageDisplay.Add("!Slowdown");
+			if(echoTimer!=null)
+			{
+				echoTimer.Stop();
+			}
+			
 
 			speed = BASE_SPEED;
 			enemySpeed = BASE_ENEMY_SPEED;
 			bulletSpeed = BASE_BULLET_SPEED;
 			rotationSpeed = BASE_ROTATION_SPEED;
-			MessageDisplay.Add("" + enemies.Count);
 			if(approachLogic!=null)
 			{
 				approachLogic.Speed = enemySpeed;
@@ -324,6 +349,7 @@ namespace ufopeli
 				plasmaCannon.AttackSound = normal;
 			}
 		}
+
 
 		void IncreseDifficulty()
 		{
