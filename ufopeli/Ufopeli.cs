@@ -1,15 +1,13 @@
-using FarseerPhysics.Common;
 using Jypeli;
 using Jypeli.Assets;
 using Jypeli.Effects;
 using Jypeli.Widgets;
-using Silk.NET.OpenGL;
-using SixLabors.ImageSharp.Processing;
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Threading;
-using static Jypeli.Physics.Collision;
+using System.ComponentModel;
+using System.Linq;
+
+// TODO: Käännä "enemy.png" että se ei ole sivuttain.
 
 namespace ufopeli
 {
@@ -24,8 +22,8 @@ namespace ufopeli
 	public class ufopeli : PhysicsGame
 	{
 		// Display
-		int Width;
-		int Heigth;
+		readonly int WIDTH;
+		readonly int HEIGTH;
 		double scaling = 1.5;
 
 		// Font
@@ -39,32 +37,29 @@ namespace ufopeli
 		// Health
 		int health = 100;
 		Label healthText;
-		Shape healthBar; // WIP
+		Shape healthBar; // WIP or scrapped
 
 		// Images
 		Image line = LoadImage("line"); // Tee oikeasti muoto myöhemmin
 		Image shipImage = LoadImage("ship"); // Miksei esimerkeissä käytetä tiedostopäätettä?? https://github.com/Jypeli-JYU/Jypeli/blob/master/Examples/Koripallo/Koripallo.cs
+		Image enemyImage = LoadImage("enemy");
 
 		// Objects
 		PhysicsObject ship;
-		PhysicsObject shipAimLine;
 		PlasmaCannon plasmaCannon;
 		PhysicsObject enemy;
 		PhysicsObject bullet;
-		PhysicsObject shipRadius;
+		List<PhysicsObject> enemies = new List<PhysicsObject>();
+		private int size;
 
 		// Logic 
 		RandomMoverBrain logic;
 		FollowerBrain approachLogic;
 
-		// Calculations
-		private double a;
-		private double b;
-		private double c;
-		private double f;
-		private double t;
-		
-		private double angle;
+		// Camera
+		private int x;
+		private int y;
+
 		// Difficulty
 		Dictionary<String, int> difficulties = new Dictionary<string, int>();
 		String difficulty = "medium";
@@ -74,15 +69,44 @@ namespace ufopeli
 		Vector direction;
 		Random random = new Random();
 		Particle fire = new Particle();
-		
+
 		// Game variables
-		private int SPEED = 1250;
+		private readonly int BASE_SPEED = 1250;
+		private int speed;
+		private readonly int BASE_ENEMY_SPEED = 100;
+		private int enemySpeed;
+		private readonly int BASE_BULLET_SPEED = 900;
+		private int bulletSpeed;
+		private readonly double BASE_ROTATION_SPEED = 0.010;
+		private double rotationSpeed;
 		
 		public override void Begin()
 		{
 
+			// Restarting 
+
+			foreach(var enemy in enemies)
+			{
+				enemy.Destroy();
+			}
+
+			score = 0;
+			enemies.Clear();
+			health = 100;
+
+			// Game var 
+			speed = BASE_SPEED;
+			enemySpeed = BASE_ENEMY_SPEED;
+			bulletSpeed = BASE_BULLET_SPEED;
+			rotationSpeed = BASE_ROTATION_SPEED;
+
+			// Background
+			Level.Background.Color = new Color(18,18,18,255);
+
 			// Score
-			scoreText = new Label("test");
+			scoreText = new Label("0");
+			scoreText.TextColor = Color.White;
+			scoreText.Layer = Layer.CreateStaticLayer();
 			Add(scoreText);
 
 			// Health
@@ -90,30 +114,30 @@ namespace ufopeli
 			healthText.Position = new Vector(Convert.ToInt32((Screen.Size.X - Screen.Size.X * 1.5) * -1) - margin - fontSize, Convert.ToInt32((Screen.Size.Y - Screen.Size.Y * 1.5)) + margin + fontSize);
 			healthText.Color = Color.White;
 			healthText.TextColor = Color.Red;
+			healthText.Font = new Font(fontSize);
 			Add(healthText);
 
 			// Difficult
+			difficulties.Clear();
 			difficulties.Add("easy", 50);
 			difficulties.Add("medium", 150);
 			difficulties.Add("hard", 300);
 
 			// Timer & Creating a player
-			Add(CreatePlayerRadius());
-			Add(CreatePlayer(50, 80));
+			ship = CreatePlayer(50, 80);
+			Add(ship);
 			Jypeli.Timer.CreateAndStart(3, AddEnemy);
-			Jypeli.Timer.CreateAndStart(0.02, UpdatePlayerRadius);
-			
+			Jypeli.Timer.CreateAndStart(15, IncreseDifficulty);
 
 			// Collision
 			AddCollisionHandler(ship, PlayerCollision);
-			AddCollisionHandler(shipRadius, AimAssist);
 
 			// Cannon
 			plasmaCannon = new PlasmaCannon(10,10);
 			plasmaCannon.Color = Color.Transparent;
 			plasmaCannon.AmmoIgnoresGravity = false;
 			plasmaCannon.Angle = plasmaCannon.Angle + Angle.FromDegrees(90);
-			plasmaCannon.FireRate = 15;
+			plasmaCannon.FireRate = 10;
 			ship.Add(plasmaCannon);
 			
 			// Keybinds
@@ -123,7 +147,12 @@ namespace ufopeli
 			Keyboard.Listen(Key.W, ButtonState.Down, Up, "Up");
 			Keyboard.Listen(Key.A, ButtonState.Down, Left, "Left");
 			Keyboard.Listen(Key.D, ButtonState.Down, Right, "Right");
-			Keyboard.Listen(Key.F, ButtonState.Down, Shoot, "Shoot");
+			Keyboard.Listen(Key.F, ButtonState.Down, Shoot, "S	hoot");
+			Keyboard.Listen(Key.E, ButtonState.Down, Shoot, "Shoot");
+			Keyboard.Listen(Key.Space, ButtonState.Down, Boost, "Boost");
+			Keyboard.Listen(Key.Space, ButtonState.Released, ResetBoost, "ResetBoost");
+			Keyboard.Listen(Key.LeftShift, ButtonState.Down, Slowdown, "Slowdown");
+			Keyboard.Listen(Key.LeftShift, ButtonState.Released, ResetSlowdown, "ResetSlowdown");
 		}
 
 		public PhysicsObject CreatePlayer(int w, int h)
@@ -141,41 +170,20 @@ namespace ufopeli
 			return ship;	
 		}
 
-		public PhysicsObject PlayerLine() // A line for the player to see where they are about to shoot (not used)
-		{
-			shipAimLine = new PhysicsObject(3, 512);
-			shipAimLine.Shape = Shape.Rectangle;
-			shipAimLine.IgnoresCollisionResponse = true;
-			shipAimLine.Tag = "line";
-			return shipAimLine;
-		}
-
-		public PhysicsObject CreatePlayerRadius()
-		{
-			shipRadius = new PhysicsObject(350,350);
-			shipRadius.IgnoresCollisionResponse = true;
-			shipRadius.Shape = Shape.Circle;
-			shipRadius.CollisionIgnoreGroup = 2;
-			shipRadius.Tag = "PlayerRadius";
-			return shipRadius;
-		}
-
-		public void UpdatePlayerRadius()
-		{
-			shipRadius.Color = Color.BloodRed;
-			shipRadius.Position = new Vector(ship.X,ship.Y);
-			shipRadius.Angle = ship.Angle;
-		}
 
 		public PhysicsObject CreateEnemy(PhysicsObject ship)
 		{
-			enemy = new PhysicsObject(30, 30);
-			enemy.Shape = Shape.Circle;
-			enemy.Color = Color.Red;
+			size = random.Next(25, 60);
+			enemy = new PhysicsObject(size, size);
+			enemy.Shape = Shape.Triangle;
+			enemy.Image = enemyImage;
 			enemy.X = random.Next(0, (int)800); // TODO: set as the screen width
 			enemy.Y = random.Next(0, (int)600); // TODO: set as the screen height
 			enemy.Brain = AddSmartLogic(ship);
 			enemy.CollisionIgnoreGroup = 1;
+			enemy.Tag = "Enemy";
+			enemy.RelativeAngle = Angle.FromDegrees(180);
+			enemy.CanRotate = true;
 			return enemy;
 		}
 
@@ -189,11 +197,12 @@ namespace ufopeli
 		public FollowerBrain AddSmartLogic(PhysicsObject target)
 		{
 			approachLogic = new FollowerBrain(target);
-			approachLogic.Speed = GetDifficulty();
-			approachLogic.DistanceFar = 600;
+			approachLogic.Speed = enemySpeed;
+			approachLogic.DistanceFar = 1200;
 			approachLogic.DistanceClose = 200;
 			approachLogic.FarBrain = AddDumbLogic();
 			approachLogic.TargetClose += EnemyCloseEvent;
+			approachLogic.TurnWhileMoving = true;
 			return approachLogic;
 		}
 
@@ -207,28 +216,11 @@ namespace ufopeli
 			health -= 10;
 			if (health <= 0)
 			{
-				//collider.Destroy();
+				ship.Destroy();
+				Restart();
 			}
 			healthText.Text = "" + health;
 		}
-
-		void AimAssist(PhysicsObject collider, PhysicsObject target)
-		{
-			a = target.X - ship.X;
-			b = target.Y - ship.Y;
-			c = Math.Sqrt(a * a + b * b);
-			angle = Math.Atan(b / a);
-			if(a>0)
-			{
-				angle = angle * (180 / Math.PI);
-			}
-			else if(a<=0)
-			{
-				angle = angle * (180 / Math.PI) + 180;
-			}
-			ship.ApplyTorque(angle/1000) ;
-		}
-		
 		void BulletCollision(IPhysicsObject collider, IPhysicsObject target)
 		{
 			if(!target.IgnoresCollisionResponse)
@@ -243,41 +235,106 @@ namespace ufopeli
 			bullet = plasmaCannon.Shoot();
 			if (bullet != null)
 			{
+				bullet.MaximumLifetime = new TimeSpan(0,0,30);
+				bullet.MaxVelocity = bulletSpeed;
+				bullet.Color = Color.Gold;
+				bullet.Shape = Shape.Triangle;
+				bullet.Tag = "Bullet";
 				bullet.Collided += BulletCollision;
 			}
 		}
 
-		public int GetDifficulty()
+		void Boost()
 		{
-			return 150;
+			MessageDisplay.Add("Boosting");
+			speed = BASE_SPEED*3;
+		}
+		void ResetBoost()
+		{
+			MessageDisplay.Add("!Boosting");
+
+			speed = BASE_SPEED;
 		}
 
+		void Slowdown()
+		{
+			MessageDisplay.Add("Slowdown");
+
+			speed = BASE_SPEED / 3;
+			enemySpeed = BASE_ENEMY_SPEED / 3;
+			bulletSpeed = BASE_BULLET_SPEED / 3;
+			rotationSpeed = BASE_ROTATION_SPEED / 3;
+			if(approachLogic!=null)
+			{
+				approachLogic.Speed = enemySpeed;
+				foreach (var enemy in enemies)
+				{
+					enemy.Brain = AddSmartLogic(ship);
+				}
+			}
+		}
+
+		void ResetSlowdown()
+		{
+			MessageDisplay.Add("!Slowdown");
+
+			speed = BASE_SPEED;
+			enemySpeed = BASE_ENEMY_SPEED;
+			bulletSpeed = BASE_BULLET_SPEED;
+			rotationSpeed = BASE_ROTATION_SPEED;
+			if(approachLogic!=null)
+			{
+				approachLogic.Speed = enemySpeed;
+				foreach (var enemy in enemies)
+				{
+					enemy.Brain = AddSmartLogic(ship);
+				}
+			}
+		}
+
+		public void IncreseDifficulty()
+		{
+			MessageDisplay.Add("Increasing Difficulty.");
+			enemySpeed += 25;
+		}
 
 		void AddEnemy()
 		{
-			Add(CreateEnemy(ship));
+			_ = CreateEnemy(ship); // ???
+			enemies.Append(_);
+			Add(_);
 		}
 
 		void Down()
 		{
-			direction = Vector.FromLengthAndAngle(SPEED * -1, ship.Angle + Angle.FromDegrees(90));
+			direction = Vector.FromLengthAndAngle(speed * -1, ship.Angle + Angle.FromDegrees(90));
 			ship.Push(direction);
 		}
 		void Up()
 		{
-			direction = Vector.FromLengthAndAngle(SPEED, ship.Angle + Angle.FromDegrees(90));
+			direction = Vector.FromLengthAndAngle(speed, ship.Angle + Angle.FromDegrees(90));
 			ship.Push(direction);
 		}
 		void Left()
 		{
-			ship.ApplyTorque(0.015);
+			ship.ApplyTorque(rotationSpeed);
 		}
 		void Right()
 		{
-			ship.ApplyTorque(-0.015);
+			ship.ApplyTorque(rotationSpeed*-1);
 		}
 
-
-
+		public void Restart()
+		{
+			ResetLayers();
+			ClearTimers();
+			ClearLights();
+			ClearControls();
+			GC.Collect();
+			Camera.Reset();
+			ControlContext.Enable();
+			IsPaused = false;
+			Begin();
+		}
 	}
 }
