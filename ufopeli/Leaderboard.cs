@@ -41,6 +41,5 @@ namespace ufopeli
 			response = httpClient.Send(request);
 			return response.IsSuccessStatusCode;
 		} 
-
 	}
 }

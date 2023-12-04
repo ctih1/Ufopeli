@@ -46,6 +46,7 @@ namespace ufopeli
 		// Images
 		Image shipImage = LoadImage("ship"); // Miksei esimerkeissä käytetä tiedostopäätettä?? https://github.com/Jypeli-JYU/Jypeli/blob/master/Examples/Koripallo/Koripallo.cs
 		Image enemyImage = LoadImage("enemy");
+		Image arrowImage = LoadImage("arrow");
 
 		// Sounds
 		SoundEffect normal = LoadSoundEffect("shoot.wav");        // Jostain syystä huono äänenlaatu
@@ -58,7 +59,9 @@ namespace ufopeli
 		PlasmaCannon plasmaCannon;
 		PhysicsObject enemy;
 		PhysicsObject bullet;
+		PhysicsObject arrow;
 		List<PhysicsObject> enemies = new List<PhysicsObject>();
+		List<FollowerBrain> logics = new List<FollowerBrain>();
 		private int size;
 
 		// Logic 
@@ -82,7 +85,7 @@ namespace ufopeli
 		// Game variables
 		private readonly int BASE_SPEED = 1250;
 		private int speed;
-		private readonly int BASE_ENEMY_SPEED=100;
+		private int BASE_ENEMY_SPEED=100;
 		private int enemySpeed;
 		private readonly int BASE_BULLET_SPEED=900;
 		private int bulletSpeed;
@@ -90,6 +93,8 @@ namespace ufopeli
 		private double rotationSpeed;
 		private readonly int BASE_FIRE_RATE=10;
 		private int fireRate;
+		private int arrowX;
+		private int arrowY;
 
 		// Leaderboard
 		Leaderboard leaderboard = new Leaderboard();
@@ -99,6 +104,7 @@ namespace ufopeli
 		InputBox inputbox;
 		PushButton acceptButton;
 		Username userManager;
+
 		public override void Begin()
 		{
 			// Starting the server
@@ -124,7 +130,7 @@ namespace ufopeli
 			}
 
 			// Sound
-			Game.MasterVolume = 0.5;
+			MasterVolume = 0.5;
 
 			// Background
 			Level.Background.Color = new Color(25, 25, 25);
@@ -154,9 +160,13 @@ namespace ufopeli
 
 			// Timer & Creating a player
 			ship = CreatePlayer(50, 80);
-			Add(ship);
+			Add(ship,-1);
+			arrow = CreateArrow(50,70);
+			Add(arrow,3);
 			Jypeli.Timer.CreateAndStart(3, AddEnemy);
 			Jypeli.Timer.CreateAndStart(15, IncreseDifficulty);
+			Jypeli.Timer.CreateAndStart(0.02, TrackPlayer);
+			Jypeli.Timer.CreateAndStart(10, AutoHeal);
 
 			// Collision
 			AddCollisionHandler(ship, PlayerCollision);
@@ -200,11 +210,19 @@ namespace ufopeli
 			ship.LinearDamping = 1.5;
 			ship.AngularDamping = 1.5;
 			ship.CollisionIgnoreGroup = 2;
-			//ship.Add(PlayerLine());
-			//ship.IgnoresCollisionWith(shipAimLine);
 			ship.Mass = 2;
 			ship.Tag = "ship";
 			return ship;	
+		}
+
+		PhysicsObject CreateArrow(int w, int h)
+		{
+			arrow = new PhysicsObject(w, h);
+			arrow.Shape = Shape.Triangle;
+			arrow.Image = arrowImage;
+			arrow.IgnoresCollisionResponse = true;
+			arrow.Tag = "arrow";
+			return arrow;
 		}
 
 
@@ -214,8 +232,8 @@ namespace ufopeli
 			enemy = new PhysicsObject(size, size);
 			enemy.Shape = Shape.Rectangle;
 			enemy.Image = enemyImage;
-			enemy.X = random.Next(0, (int)800); // TODO: set as the screen width
-			enemy.Y = random.Next(0, (int)600); // TODO: set as the screen height
+			enemy.X = random.Next(0, (int) Screen.Size.X-margin); // TODO: set as the screen width
+			enemy.Y = random.Next(0, (int) Screen.Size.Y-margin); // TODO: set as the screen height
 			enemy.Brain = AddSmartLogic(ship);
 			enemy.CollisionIgnoreGroup = 1;
 			enemy.Tag = "Enemy";
@@ -240,13 +258,12 @@ namespace ufopeli
 			approachLogic.FarBrain = AddDumbLogic();
 			approachLogic.TargetClose += EnemyCloseEvent;
 			approachLogic.TurnWhileMoving = true;
+			logics.Add(approachLogic);
 			return approachLogic;
 		}
 
-		void EnemyCloseEvent()
-		{
-			
-		}
+		void EnemyCloseEvent() {}
+
 		void ButtonClickEvent()
 		{
 			userManager.SaveUsername(inputbox.Text);
@@ -256,14 +273,21 @@ namespace ufopeli
 
 		void PlayerCollision(PhysicsObject collider, PhysicsObject target)
 		{
-			health -= 10;
-			if (health <= 0)
+			if(target!=null && enemy!=null)
 			{
-				ship.Destroy();
-				Restart();
+				if (target.Tag == enemy.Tag)
+				{
+					health -= 10;
+					if (health <= 0)
+					{
+						ship.Destroy();
+						Restart();
+					}
+					healthText.Text = "" + health;
+				}
 			}
-			healthText.Text = "" + health;
 		}
+
 		void BulletCollision(IPhysicsObject collider, IPhysicsObject target)
 		{
 			if(!target.IgnoresCollisionResponse)
@@ -272,7 +296,12 @@ namespace ufopeli
 				scoreText.Text = "" + score;
 				target.Destroy();
 			}
+			if(target.Tag != arrow.Tag)
+			{
+				collider.Destroy();
+			}
 		}
+
 		void Shoot()
 		{
 			bullet = plasmaCannon.Shoot();
@@ -287,34 +316,25 @@ namespace ufopeli
 			}
 		}
 
-		void Boost()
-		{
-			speed = BASE_SPEED*3;
-		}
-		void ResetBoost()
-		{
-
-			speed = BASE_SPEED;
-		}
+		void Boost() {speed = BASE_SPEED*3;}
+		void ResetBoost() {speed = BASE_SPEED;}
 
 		void Slowdown()
 		{
-
 			speed = BASE_SPEED / 3;
 			enemySpeed = BASE_ENEMY_SPEED / 3;
 			bulletSpeed = BASE_BULLET_SPEED / 3;
 			rotationSpeed = BASE_ROTATION_SPEED / 3;
 			fireRate = BASE_FIRE_RATE / 3;
 
-			if (approachLogic!=null)
+			if (approachLogic != null)
 			{
-				approachLogic.Speed = enemySpeed;
-				foreach (var enemy_ in enemies)
+				foreach (var brain in logics)
 				{
-					enemy_.Brain = null;
-					enemy_.Brain = AddSmartLogic(ship);
+					brain.Speed = enemySpeed;
 				}
 			}
+
 			if (plasmaCannon != null)	 
 			{
 				plasmaCannon.FireRate = fireRate;
@@ -336,10 +356,9 @@ namespace ufopeli
 			rotationSpeed = BASE_ROTATION_SPEED;
 			if(approachLogic!=null)
 			{
-				approachLogic.Speed = enemySpeed;
-				foreach (var enemy_ in enemies)
+				foreach(var brain in logics)
 				{
-					enemy_.Brain = AddSmartLogic(ship);
+					brain.Speed = enemySpeed;
 				}
 			}
 
@@ -350,18 +369,71 @@ namespace ufopeli
 			}
 		}
 
+		void AutoHeal()
+		{
+			health += 2;
+		}
+
+		void TrackPlayer()
+		{
+			// Vähän rikki, en jaksa korjata. (saattaa mennä Y- tai  X akselissa yli
+			arrow.IsVisible = false;
+
+			if (ship.X > ((Screen.Width / 2) - margin))
+			{
+				// Rigth
+				arrow.IsVisible = true;
+
+				arrow.Position = new Vector((Screen.Width / 2) - margin, ship.Y);
+			}
+			if (ship.X < ((Screen.Width / 2) - margin) * -1)
+			{
+				// Left
+				arrow.IsVisible = true;
+				arrow.Position = new Vector(((Screen.Width / 2) - margin) * -1, ship.Y);
+			}
+			if (ship.Y > ((Screen.Height / 2) - margin))
+			{
+				// Top
+				arrow.IsVisible = true;
+				arrow.Position = new Vector(ship.X, (Screen.Height / 2) - margin);
+			}
+			if (ship.Y < (((Screen.Height / 2) - margin) * -1))
+			{
+				// Bottom
+				arrow.IsVisible = true;
+				arrow.Position = new Vector(ship.X, (((Screen.Height / 2) - margin) * -1));
+			}
+
+			if(arrow.Y<(Screen.Height/2)*-1) {
+				arrow.Y = ((Screen.Height / 2) * -1) + margin;
+			}
+			if(arrow.Y>Screen.Height-margin)
+			{
+				arrow.Y = Screen.Height-margin;
+			}
+			if(arrow.X<(Screen.Width/2)*-1)
+			{
+				arrow.X = ((Screen.Width/2)*-1)+margin;
+			}
+			if(arrow.X>(Screen.Width/2)-margin)
+			{
+				arrow.X = (Screen.Width/2)-margin;
+			}
+ 			arrow.Angle = ship.Angle;
+		}
 
 		void IncreseDifficulty()
 		{
 			MessageDisplay.Add("Increasing Difficulty.");
-			enemySpeed += 25;
+			BASE_ENEMY_SPEED += 25;
 		}
 
 		void AddEnemy()
 		{
 			_ = CreateEnemy(ship);
 			enemies.Append(_);
-			Add(_);
+			Add(_,-1);
 		}
 
 		void Down()
