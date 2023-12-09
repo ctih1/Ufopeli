@@ -7,18 +7,11 @@ const third = document.getElementById("3");
 let data;
 console.log(score);
 
-function convert(obj) {
-  return Object.keys(obj).map(key => ({
-      name: key,
-      value: obj[key],
-  }));
-}
  function getJsonData() {
   const response = fetch("https://ufopeliserver.ctih.repl.co/get").then(response => response.json()).then(data => {
-    this.data = convert(data);
-    first.innerHTML = this.data[0].name + ": " +  this.data[0].value;
-    second.innerHTML = this.data[1].name + ": " +  this.data[1].value;
-    third.innerHTML = this.data[2].name + ": " +  this.data[2].value;
+    first.innerHTML = data[0][0] + ": " + data[0][1];
+    second.innerHTML = data[1][0] + ": " + data[1][1];
+    third.innerHTML = data[2][0] + ": " + data[2][1];
   });
 
 }
