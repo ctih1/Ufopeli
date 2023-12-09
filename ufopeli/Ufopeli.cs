@@ -98,9 +98,11 @@ namespace ufopeli
 
 		// Leaderboard
 		Leaderboard leaderboard = new Leaderboard();
+		MultiSelectWindow leaderboardDisplay;
+
 
 		// Username
-		String username;
+		String username = "unnamed";
 		InputBox inputbox;
 		PushButton acceptButton;
 		Username userManager;
@@ -119,7 +121,7 @@ namespace ufopeli
 
 			// Username
 			userManager = new Username();
-			username = userManager.GetUsername();
+			// username = userManager.GetUsername();
 			if (username==null) 
 			{
 				inputbox = userManager.Input();
@@ -163,7 +165,7 @@ namespace ufopeli
 			Add(ship,-1);
 			arrow = CreateArrow(50,70);
 			Add(arrow,3);
-			Jypeli.Timer.CreateAndStart(3, AddEnemy);
+			Jypeli.Timer.CreateAndStart(1, AddEnemy);
 			Jypeli.Timer.CreateAndStart(15, IncreseDifficulty);
 			Jypeli.Timer.CreateAndStart(0.02, TrackPlayer);
 			Jypeli.Timer.CreateAndStart(10, AutoHeal);
@@ -200,6 +202,7 @@ namespace ufopeli
 			Keyboard.Listen(Key.Space, ButtonState.Released, ResetBoost, "ResetBoost");
 			Keyboard.Listen(Key.LeftShift, ButtonState.Down, Slowdown, "Slowdown");
 			Keyboard.Listen(Key.LeftShift, ButtonState.Released, ResetSlowdown, "ResetSlowdown");
+			Keyboard.Listen(Key.Tab, ButtonState.Down, ResetSlowdown, "ResetSlowdown");
 		}
 
 		PhysicsObject CreatePlayer(int w, int h)
@@ -292,6 +295,7 @@ namespace ufopeli
 		{
 			if(!target.IgnoresCollisionResponse)
 			{
+				BASE_ENEMY_SPEED += 1;
 				score++;
 				scoreText.Text = "" + score;
 				target.Destroy();
@@ -372,6 +376,7 @@ namespace ufopeli
 		void AutoHeal()
 		{
 			health += 2;
+			healthText.Text = "" + health;
 		}
 
 		void TrackPlayer()
@@ -427,6 +432,7 @@ namespace ufopeli
 		{
 			MessageDisplay.Add("Increasing Difficulty.");
 			BASE_ENEMY_SPEED += 25;
+			enemySpeed = BASE_ENEMY_SPEED;
 		}
 
 		void AddEnemy()
@@ -449,16 +455,23 @@ namespace ufopeli
 		void Left()
 		{
 			ship.ApplyTorque(rotationSpeed);
-		}
+		} 
 		void Right()
 		{
 			ship.ApplyTorque(rotationSpeed*-1);
 		}
 
+		void ShowLeaderboard()
+		{
+			leaderboardDisplay = new MultiSelectWindow("Your score.", "Continue","Quit");
+			Add(leaderboardDisplay);
+		}
 		 void Restart()
 		{
 			var q = Task.Run(() =>
 			{ leaderboard.SaveData(user:username, score:score) ; });
+			System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = String.Format("https://ctih1.github.io/Ufopeli/?score={0}",score), UseShellExecute=true});
+			BASE_ENEMY_SPEED = 100;
 			ResetLayers();
 			ClearTimers();
 			ClearLights();
