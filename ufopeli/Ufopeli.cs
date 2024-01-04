@@ -269,9 +269,7 @@ namespace ufopeli
 
 		void ButtonClickEvent()
 		{
-          userManager.SaveUsername(inputbox.Text);
-          acceptButton.Destroy();
-          inputbox.Destroy();
+          		username = (inputbox.Text);
 		}
 
 		void PlayerCollision(PhysicsObject collider, PhysicsObject target)
