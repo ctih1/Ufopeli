@@ -215,7 +215,7 @@ namespace ufopeli
 			ship.CollisionIgnoreGroup = 2;
 			ship.Mass = 2;
 			ship.Tag = "ship";
-			return ship;	
+			return ship;	//////
 		}
 
 		PhysicsObject CreateArrow(int w, int h)
@@ -269,9 +269,9 @@ namespace ufopeli
 
 		void ButtonClickEvent()
 		{
-			userManager.SaveUsername(inputbox.Text);
-			acceptButton.Destroy();
-			inputbox.Destroy();
+          userManager.SaveUsername(inputbox.Text);
+          acceptButton.Destroy();
+          inputbox.Destroy();
 		}
 
 		void PlayerCollision(PhysicsObject collider, PhysicsObject target)
