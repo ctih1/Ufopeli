@@ -19,6 +19,7 @@ namespace ufopeli
 		static void Main()
 		{
 			using var game = new ufopeli();
+			
 			game.Run();
 		}
 	}
